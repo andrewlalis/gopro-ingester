@@ -22,3 +22,7 @@ docs/
 
 # Code coverage
 *.lst
+
+# Compiled executable
+gopro-ingester
+gopro-ingester.exe

@@ -1,0 +1,14 @@
+{
+	"authors": [
+		"Andrew Lalis"
+	],
+	"copyright": "Copyright © 2022, Andrew Lalis",
+	"dependencies": {
+		"dsh": "~>1.6.1",
+		"filesizes": "~>1.1.0",
+		"progress": "~>5.0.2"
+	},
+	"description": "Simple program for ingesting content from a GoPro media card.",
+	"license": "MIT",
+	"name": "gopro-ingester"
+}

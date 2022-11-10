@@ -1,6 +1,7 @@
-import dsh;
 import std.typecons;
 import std.path;
+import std.file;
+import std.stdio;
 import std.string;
 import std.algorithm;
 import std.getopt;
@@ -55,7 +56,7 @@ int main(string[] args) {
 
     auto nullableGoProDir = getGoProDir(mediaSearchDir);
     if (nullableGoProDir.isNull) {
-        error("Couldn't find GoPro directory.");
+        writeln("Couldn't find GoPro directory.");
         return 1;
     }
     string goProDir = nullableGoProDir.get();

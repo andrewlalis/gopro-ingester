@@ -9,6 +9,8 @@ import std.typecons;
 import filesizes;
 import progress;
 
+const DEFAULT_BUFFER_SIZE = 1024 * 1024;
+
 private struct IngestData {
     DirEntry[] filesToCopy;
 
@@ -19,6 +21,15 @@ private struct IngestData {
     size_t fileCount() {
         return filesToCopy.length;
     }
+}
+
+public struct IngestConfig {
+    string inputDir;
+    string outputDir;
+    size_t bufferSize = DEFAULT_BUFFER_SIZE;
+    bool force = false;
+    bool dryRun = false;
+    bool clean = false;
 }
 
 /** 
@@ -36,11 +47,17 @@ private bool shouldCopyFile(DirEntry entry, string targetFile, bool force) {
         (!exists(targetFile) || getSize(targetFile) != entry.size || force);
 }
 
-private IngestData discoverIngestData(string sourceDir, string targetDir, bool force) {
+/** 
+ * Searches for relevant files to ingest.
+ * Params:
+ *   config = The ingest config.
+ * Returns: Data about what to ingest.
+ */
+private IngestData discoverIngestData(IngestConfig config) {
     IngestData data;
-    foreach (DirEntry entry; dirEntries(sourceDir, SpanMode.shallow)) {
-        string targetFile = buildPath(targetDir, baseName(entry.name));
-        if (shouldCopyFile(entry, targetFile, force)) {
+    foreach (DirEntry entry; dirEntries(config.inputDir, SpanMode.shallow)) {
+        string targetFile = buildPath(config.outputDir, baseName(entry.name));
+        if (shouldCopyFile(entry, targetFile, config.force)) {
             data.filesToCopy ~= entry;
         }
     }
@@ -50,42 +67,38 @@ private IngestData discoverIngestData(string sourceDir, string targetDir, bool f
 /** 
  * Copies files from a source to a target directory.
  * Params:
- *   sourceDir = The source directory.
- *   targetDir = The target directory.
- *   bufferSize = The buffer size to use when copying.
- *   force = Whether to overwrite existing files.
- *   dryRun = Whether to perform a dry-run.
+ *   config = The configuration for the ingest operation.
  * Returns: An exit code.
  */
-public int copyFiles(string sourceDir, string targetDir, size_t bufferSize, bool force, bool dryRun) {
-    IngestData ingestData = discoverIngestData(sourceDir, targetDir, force);
+public int copyFiles(IngestConfig config) {
+    IngestData ingestData = discoverIngestData(config);
     if (ingestData.fileCount == 0) {
         writeln("No new files to copy.");
         return 0;
     }
-	if (getAvailableDiskSpace(targetDir) < ingestData.totalFileSize) {
+	if (getAvailableDiskSpace(config.outputDir) < ingestData.totalFileSize) {
 		writefln!"Not enough disk space to copy all files: %s available, %s needed."(
-			formatFilesize(getAvailableDiskSpace(targetDir)),
+			formatFilesize(getAvailableDiskSpace(config.outputDir)),
 			formatFilesize(ingestData.totalFileSize)
 		);
 		return 1;
 	}
-    writefln!"Copying %d files (%s) to %s."(ingestData.fileCount, formatFilesize(ingestData.totalFileSize), targetDir);
-	if (dryRun) writeln("(Dry Run)");
+    writefln!"Copying %d files (%s) to %s."(ingestData.fileCount, formatFilesize(ingestData.totalFileSize), config.outputDir);
+	if (config.dryRun) writeln("(Dry Run)");
 
-    if (!exists(targetDir) && !dryRun) mkdirRecurse(targetDir);
+    if (!exists(config.outputDir) && !config.dryRun) mkdirRecurse(config.outputDir);
 
     Bar progressBar = new FillingSquaresBar();
     progressBar.width = 80;
     progressBar.max = ingestData.totalFileSize;
     progressBar.start();
-	ubyte[] buffer = new ubyte[bufferSize];
+	ubyte[] buffer = new ubyte[config.bufferSize];
     foreach (DirEntry entry; ingestData.filesToCopy) {
         string filename = baseName(entry.name);
-        string targetFile = buildPath(targetDir, filename);
+        string targetFile = buildPath(config.outputDir, filename);
 		string verb = exists(targetFile) ? "Overwriting" : "Copying";
         progressBar.message = { return std.string.format!"%s %s (%s)"(verb, filename, formatFilesize(entry.size)); };
-		if (!dryRun) {
+		if (!config.dryRun) {
 			File inputFile = File(entry.name, "rb");
 			File outputFile = File(targetFile, "wb");
 			foreach (ubyte[] localBuffer; inputFile.byChunk(buffer)) {

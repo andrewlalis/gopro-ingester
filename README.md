@@ -22,4 +22,15 @@ This tool comes with a variety of options, which you can view by running `gopro-
 - `--force` - Forcibly overwrite existing files.
 - `--dryRun` - Perform a dry-run (and don't actually copy anything).
 - `--bufferSize` - The size of the memory buffer for copying.
+- `--clean` - Delete copied items from the GoPro's media card afterwards.
 - `--help` - Shows help information.
+
+### System Compatibility
+Currently, this software is known to work with the following GoPro models:
+- Hero 9
+
+And the following operating systems:
+- Linux/Ubuntu
+- MacOS
+
+If you've got the time and hardware, I'd greatly appreciate if you could test this software on your own device, and make a PR to add it to the list here, or an issue if something doesn't work.

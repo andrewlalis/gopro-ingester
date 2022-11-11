@@ -87,17 +87,19 @@ public int copyFiles(IngestConfig config) {
 	if (config.dryRun) writeln("(Dry Run)");
 
     if (!exists(config.outputDir) && !config.dryRun) mkdirRecurse(config.outputDir);
-
-    Bar progressBar = new FillingSquaresBar();
-    progressBar.width = 80;
-    progressBar.max = ingestData.totalFileSize;
-    progressBar.start();
+    
 	ubyte[] buffer = new ubyte[config.bufferSize];
     foreach (DirEntry entry; ingestData.filesToCopy) {
         string filename = baseName(entry.name);
         string targetFile = buildPath(config.outputDir, filename);
 		string verb = exists(targetFile) ? "Overwriting" : "Copying";
-        progressBar.message = { return std.string.format!"%s %s (%s)"(verb, filename, formatFilesize(entry.size)); };
+        Bar progressBar = new FillingSquaresBar();
+        progressBar.width = 40;
+        progressBar.max = entry.size;
+        string message = format!"%s %s (%s)"(verb, filename, formatFilesize(entry.size))
+            .leftJustify(40, ' ');
+        progressBar.message = { return message; };
+        progressBar.start();
 		if (!config.dryRun) {
 			File inputFile = File(entry.name, "rb");
 			File outputFile = File(targetFile, "wb");
@@ -108,8 +110,30 @@ public int copyFiles(IngestConfig config) {
 		} else {
 			progressBar.next(getSize(entry.name));
 		}
+        progressBar.finish();
     }
-    progressBar.finish();
+
+    if (config.clean && !config.dryRun) {
+        writeln("Cleaning GoPro media card.");
+        string[] filesToRemove;
+        foreach (string filename; dirEntries(config.inputDir, SpanMode.shallow)) {
+            filesToRemove ~= filename;
+        }
+        Bar progressBar = new FillingSquaresBar();
+        progressBar.max = filesToRemove.length;
+        progressBar.width = 80;
+        progressBar.start();
+        foreach (string filename; filesToRemove) {
+            std.file.remove(filename);
+            progressBar.next();
+        }
+        progressBar.finish();
+        string trashDir = buildNormalizedPath(config.inputDir, "..", "..", ".Trash-1000");
+        if (exists(trashDir) && isDir(trashDir)) {
+            writefln!"Removing \"%s\"."(trashDir);
+            rmdirRecurse(trashDir);
+        }
+    }
 
 	return 0;
 }

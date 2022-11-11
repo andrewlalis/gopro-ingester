@@ -1,65 +1,84 @@
-import std.typecons;
-import std.path;
-import std.file;
-import std.stdio;
-import std.string;
-import std.algorithm;
-import std.getopt;
-import filesizes;
-import progress;
-
 import utils;
 import ingest;
 
-const DEFAULT_MEDIA_DIR = "/media";
-const DEFAULT_OUTPUT_DIR = "raw";
-
 int main(string[] args) {
-	writeln(
-		"+---------------------------------+\n" ~
-		"|                                 |\n" ~
-		"|       GoPro Ingester            |\n" ~
-		"|         v1.0.0                  |\n" ~
-		"|         by Andrew Lalis         |\n" ~
-		"|                                 |\n" ~
-		"+---------------------------------+\n"
-	);
-    IngestConfig config;
-    config.outputDir = buildPath(getcwd(), DEFAULT_OUTPUT_DIR);
-    string mediaSearchDir = DEFAULT_MEDIA_DIR;
-    auto helpInfo = getopt(
-        args,
-        "mediaDir|i",
-		format!"The base directory from which to search for the GoPro media. Defaults to \"%s\"."(mediaSearchDir),
-		&mediaSearchDir,
-        "outputDir|o",
-		format!"The directory to copy data to. Defaults to \"%s\". Will create the directory if it doesn't exist yet."(config.outputDir),
-		&config.outputDir,
-        "force|f",
-		format!"Whether to forcibly overwrite existing files. Defaults to %s."(config.force),
-		&config.force,
-		"dryRun|d",
-		format!"Whether to perform a dry-run (don't actually copy anything). Defaults to %s."(config.dryRun),
-		&config.dryRun,
-		"bufferSize|b",
-		format!"The size of the buffer for copying files, in bytes. Defaults to %s."(formatFilesize(config.bufferSize)),
-		&config.bufferSize,
-        "clean|c",
-        format!"Whether to remove files from the GoPro media card after copying. Defaults to %s."(config.clean),
-        &config.clean
-    );
-
-    if (helpInfo.helpWanted) {
-        defaultGetoptPrinter("Ingestion tool for importing data from GoPro media cards.", helpInfo.options);
+	printBanner();
+    CliResult result = parseArgs(args);
+    if (result.type == CliResultType.NO_CONTENT) {
         return 0;
+    } else if (result.type == CliResultType.MISSING_MEDIA) {
+        return 1;
+    } else {
+        return copyFiles(result.config);
+    }
+}
+
+unittest {
+    // First some utilities to make the tests simpler.
+    import std.stdio;
+    import std.file;
+    import std.path;
+    import std.algorithm;
+    import std.string;
+    import utils;
+
+    struct DirView {
+        DirEntry[] entries;
     }
 
-    auto nullableGoProDir = getGoProDir(mediaSearchDir);
-    if (nullableGoProDir.isNull) {
-        writeln("Couldn't find GoPro directory.");
-        return 1;
+    DirView getDirView(string dir) {
+        DirView view;
+        foreach (DirEntry entry; dirEntries(dir, SpanMode.shallow)) {
+            view.entries ~= entry;
+        }
+        view.entries.sort!((a, b) => a.name > b.name);
+        return view;
     }
-    config.inputDir = nullableGoProDir.get();
-    writefln!"Found GoPro media at %s."(config.inputDir);
-    return copyFiles(config);
+
+    int callApp(string[] args ...) {
+        return main(["app"] ~ args);
+    }
+
+    string getBaseCardDir(string name) {
+        return buildPath("test", "media-cards", "card-" ~ name);
+    }
+
+    string getTestCardDir(string name) {
+        return buildPath("test", "media-cards", "card-test-" ~ name);
+    }
+
+    void assertCardsUnchanged(string[] cards ...) {
+        foreach (string card; cards) {
+            string baseDir = getBaseCardDir(card);
+            string testDir = getTestCardDir(card);
+            if (exists(testDir)) {
+                assert(getDirView(baseDir) == getDirView(testDir));
+            }
+        }
+    }
+
+    void prepareCardTests(string[] cards ...) {
+        foreach (string card; cards) {
+            copyDir(getBaseCardDir(card), getTestCardDir(card));
+        }
+    }
+
+    void cleanupCardTests(string[] cards ...) {
+        foreach (string card; cards) {
+            rmdirRecurse(getTestCardDir(card));
+        }
+    }
+
+    string[] allCards = ["1", "2", "3"];
+    prepareCardTests(allCards);
+    writeln(isDir(getBaseCardDir("1")));
+    assert(callApp("-h") == 0);
+    assertCardsUnchanged(allCards);
+    assert(callApp("--help") == 0);
+    assertCardsUnchanged(allCards);
+    assert(callApp("-f", "-h") == 0);
+    assertCardsUnchanged(allCards);
+    // Ingesting from an empty card shouldn't have any effect.
+    assert(callApp("-i", getTestCardDir("1")) == 0);
+    assertCardsUnchanged("1");
 }

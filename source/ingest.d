@@ -8,6 +8,7 @@ import std.string;
 import std.typecons;
 import filesizes;
 import progress;
+import utils;
 
 const DEFAULT_BUFFER_SIZE = 1024 * 1024;
 
@@ -43,7 +44,7 @@ public struct IngestConfig {
  */
 private bool shouldCopyFile(DirEntry entry, string targetFile, bool force) {
     return entry.isFile() &&
-        (entry.name.endsWith(".MP4") || entry.name.endsWith(".WAV")) &&
+        (endsWithAny(entry.name, ".MP4", ".mp4", ".WAV", ".wav")) &&
         (!exists(targetFile) || getSize(targetFile) != entry.size || force);
 }
 
@@ -136,4 +137,18 @@ public int copyFiles(IngestConfig config) {
     }
 
 	return 0;
+}
+
+unittest {
+    import testutils;
+
+    // Test a dry run.
+    prepareCardTests("1");
+    IngestConfig c1;
+    c1.dryRun = true;
+    c1.inputDir = getTestCardDir("1");
+    c1.outputDir = "test-out";
+    assert(copyFiles(c1) == 0);
+    assertCardsUnchanged("1");
+    cleanupCardTests("1");
 }
